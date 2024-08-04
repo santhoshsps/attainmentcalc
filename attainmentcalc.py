@@ -172,25 +172,21 @@ class course:
                                'weight':float(weight),'marklist':marklist})
   def compute_co_pso(self,sheet):
     df, pso_list, co_list = read_co_pso_mapping(self.spreadsheet,sheet)
-    course_co_list = self.attainment.columns
-    pso_attainment_data = pd.DataFrame(columns =pso_list, index = course_co_list)
-    pso_attainment_data[:] = 0
-    pso_total = {}
-    for pso in pso_list:
-      pso_total[pso] = 0
-      for co in course_co_list:
-        pso_total[pso] += df.loc[co,pso]
-        pso_attainment_data.loc[co,pso] = round(df.loc[co,pso]*self.attainment.loc['Attainment %',co]/100,2)
-    pso_sum = pso_attainment_data.sum().apply(pd.to_numeric)
-    pso_percent = {}
-    for pso in pso_list:
-      if pso_total[pso] != 0:
-        pso_percent[pso] = round( pso_sum[pso]*100/pso_total[pso],2)
-      else:
-        pso_percent[pso] = 0
-    pso_attainment_data.loc['Total',:] = pso_sum
-    pso_attainment_data.loc['%'] = pso_percent
-    return pso_attainment_data
+    attainment = df.copy()
+    attainment[:] = 0
+    for po in pso_list:
+      for co in co_list:
+        if co in self.attainment.columns:
+         attainment.loc[co,po] = round(df.loc[co,po]*self.attainment.loc['Attainment %',co]/100,2)
+    total = attainment.sum()
+    attainment_max = df.sum()
+    percent = attainment_max.copy()
+    selected = attainment_max != 0
+    percent[selected] = total[selected]*100/attainment_max[selected]
+    attainment.loc['Total',:] = total
+    attainment.loc['%'] = percent
+    attainment.loc['%'] = attainment.loc['%'].map(lambda x: round(x,2))
+    return attainment
   '''
   def compute_co_pso(self,sheet):
     df, pso_list, co_list = read_co_pso_mapping(self.spreadsheet,sheet)

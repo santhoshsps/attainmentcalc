@@ -170,7 +170,6 @@ class course:
   def add_assessments(self, assessment_type, assessment_id, weight, marklist):
       self.assessments.append({'type':assessment_type,'id':assessment_id,\
                                'weight':float(weight),'marklist':marklist})
-
   def compute_co_pso(self,sheet):
     df, pso_list, co_list = read_co_pso_mapping(self.spreadsheet,sheet)
     course_co_list = self.attainment.columns
@@ -192,6 +191,29 @@ class course:
     pso_attainment_data.loc['Total',:] = pso_sum
     pso_attainment_data.loc['%'] = pso_percent
     return pso_attainment_data
+  '''
+  def compute_co_pso(self,sheet):
+    df, pso_list, co_list = read_co_pso_mapping(self.spreadsheet,sheet)
+    course_co_list = self.attainment.columns
+    pso_attainment_data = pd.DataFrame(columns =pso_list, index = course_co_list)
+    pso_attainment_data[:] = 0
+    pso_total = {}
+    for pso in pso_list:
+      pso_total[pso] = 0
+      for co in course_co_list:
+        pso_total[pso] += df.loc[co,pso]
+        pso_attainment_data.loc[co,pso] = round(df.loc[co,pso]*self.attainment.loc['Attainment %',co]/100,2)
+    pso_sum = pso_attainment_data.sum().apply(pd.to_numeric)
+    pso_percent = {}
+    for pso in pso_list:
+      if pso_total[pso] != 0:
+        pso_percent[pso] = round( pso_sum[pso]*100/pso_total[pso],2)
+      else:
+        pso_percent[pso] = 0
+    pso_attainment_data.loc['Total',:] = pso_sum
+    pso_attainment_data.loc['%'] = pso_percent
+    return pso_attainment_data
+  '''
 
   def write_attainment(self,sheet_name,verbose=True):
     if verbose:

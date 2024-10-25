@@ -115,6 +115,8 @@ class course:
       self.total_weight += self.assessment_weights[assessment_type]
 
     for sheet_name in assessment_sheet_list:
+      if not sheet_name:
+        continue
       co_marklist, assessment_type, assessment_id, weight = read_assessment(self.spreadsheet,sheet_name)
       co_marklist.index = co_marklist['Code']
       co_marklist.drop('Code',axis=1,inplace=True)

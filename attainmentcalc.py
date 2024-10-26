@@ -231,7 +231,7 @@ class course:
       self.spreadsheet.del_worksheet(newsheet)
     except gspread.exceptions.WorksheetNotFound:
       pass
-    newsheet = self.spreadsheet.add_worksheet(title=sheet_name,rows=100,cols=20)
+    newsheet = self.spreadsheet.add_worksheet(title=sheet_name,rows=500,cols=20)
     dfs = []
     self.rows.append(self.row)
     dfs = append_df_with_title(dfs,self.result, "Results")

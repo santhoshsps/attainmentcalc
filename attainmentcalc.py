@@ -70,8 +70,7 @@ def read_assessment(spreadsheet, sheet_name):
       co_marklist.loc[i-row_start,'Name'] = df.iloc[i,1]
       marks_obtained = df.iloc[i,col_start:][selected_indices].apply(pd.to_numeric).sum()
       co_marklist.loc[i-row_start,co] = marks_obtained/marks_for_co[co]
-
-  return co_marklist, assessment_type, id, weight
+  return co_marklist, assessment_type, id, weight, co_list.to_list()
 
 
 #course
@@ -108,56 +107,67 @@ class course:
     row = find_row_index(df_general, 'Threshold')
     self.threshold = float(df_general.iloc[row,1])
 
-    self.total_weight = 0
-    self.num_assessments_type ={}
-    for assessment_type in self.assessment_weights.keys():
-      self.num_assessments_type[assessment_type] = 0
-      self.total_weight += self.assessment_weights[assessment_type]
-
+    self.co_set = set()
+    self.assessment_types = set()
     for sheet_name in assessment_sheet_list:
       if not sheet_name:
         continue
-      co_marklist, assessment_type, assessment_id, weight = read_assessment(self.spreadsheet,sheet_name)
+      co_marklist, assessment_type, assessment_id, weight, co_list = read_assessment(self.spreadsheet,sheet_name)
       co_marklist.index = co_marklist['Code']
       co_marklist.drop('Code',axis=1,inplace=True)
       co_marklist = co_marklist[co_marklist.index != 'Code']
-      self.add_assessments(assessment_type, assessment_id, weight, co_marklist)
-      self.num_assessments_type[assessment_type] += 1
+      self.add_assessments(assessment_type, assessment_id, weight, co_marklist, sorted(co_list))
+      self.co_set.update(co_list)
+      self.assessment_types.add(assessment_type)
+    self.co_set = sorted(self.co_set)
+    self.assessment_types = sorted(self.assessment_types)
+    
+    
+    self.result = self.assessments[0]['marklist'].iloc[:,:1].copy()
+    for co in self.co_set:
+      self.result[co] = 0
+    
+    self.num_assessments = pd.DataFrame(index=self.assessment_weights.keys())
+    for co in self.co_set:
+      self.num_assessments[co] = 0
 
-    self.result = self.assessments[0]['marklist'].copy()
-    selected_colums = self.assessments[0]['marklist'].columns.difference(['Name'])
-
-    self.assessments_consolidated ={}
-    for assessment_type in self.assessment_weights.keys():
-      self.assessments_consolidated[assessment_type] = self.assessments[0]['marklist'].copy()
-      self.assessments_consolidated[assessment_type][selected_colums] = 0
-      
+    self.assessments_consolidated = {}
+    for assessment_type in self.assessment_types:
+      self.assessments_consolidated[assessment_type] = self.result.copy()
+    
     for assessment in self.assessments:
       assessment_type = assessment['type']
-      self.assessments_consolidated[assessment_type][selected_colums] += assessment['marklist'][selected_colums]
+      for co in assessment['co_list']:
+        self.assessments_consolidated[assessment_type][co] += assessment['marklist'][co]
+        self.num_assessments.loc[assessment_type, co] += 1
 
-    for assessment_type in self.assessment_weights.keys():
-      self.assessments_consolidated[assessment_type][selected_colums] /= self.num_assessments_type[assessment_type]
+    for assessment_type in self.assessment_types:
+      for co in self.co_set:
+        if self.num_assessments.loc[assessment_type,co] != 0:
+          self.assessments_consolidated[assessment_type][co] /= self.num_assessments.loc[assessment_type,co]
     self.assessments_consolidated_without_weigth = self.assessments_consolidated.copy()
 
-    for assessment_type in self.assessment_weights.keys():
-      self.assessments_consolidated[assessment_type][selected_colums] *= self.assessment_weights[assessment_type]
+    total_weight = 0
+    for assessment_type in self.assessment_types:
+      total_weight += self.assessment_weights[assessment_type]
 
+    markcols = self.assessments_consolidated['CA Exam'].columns.difference(['Name'])
+    for assessment_type in self.assessment_types:
+      self.assessments_consolidated[assessment_type][markcols] *= self.assessment_weights[assessment_type]
 
     assessment_name = list(self.assessments_consolidated.keys())[0]
     self.result = self.assessments_consolidated[assessment_name].copy()
-    self.result[selected_colums] = 0
-    for assessment_type in self.assessment_weights.keys():
-      self.result[selected_colums] += self.assessments_consolidated[assessment_type][selected_colums]
-    self.result[selected_colums] /= self.total_weight
-
+    self.result[markcols] = 0
+    for assessment_type in self.assessment_types:
+      self.result[markcols] += self.assessments_consolidated[assessment_type][markcols]
+    self.result[markcols] /= total_weight
 
     self.attainment = pd.DataFrame(index = ["Attainment %","Attainment Level"],
                                               columns = self.result.columns[1:])
     self.attainment[:] = 0
     total_students = self.result.shape[0]
 
-    for column in selected_colums:
+    for column in markcols:
       students_above_threshold = self.result[column][self.result[column] >= self.threshold].count()
       self.attainment.loc["Attainment %",column] = \
         round(students_above_threshold*100/total_students,2)
@@ -169,9 +179,10 @@ class course:
     self.po_attainment_data = self.compute_co_pso(self.CO_PO_sheet)
 
 
-  def add_assessments(self, assessment_type, assessment_id, weight, marklist):
+  def add_assessments(self, assessment_type, assessment_id, weight, marklist, co_list):
       self.assessments.append({'type':assessment_type,'id':assessment_id,\
-                               'weight':float(weight),'marklist':marklist})
+                               'weight':float(weight),'marklist':marklist,\
+                               'co_list':co_list})
   def compute_co_pso(self,sheet):
     df, pso_list, co_list = read_co_pso_mapping(self.spreadsheet,sheet)
     attainment = df.copy()
@@ -189,29 +200,6 @@ class course:
     attainment.loc['%'] = percent
     attainment.loc['%'] = attainment.loc['%'].map(lambda x: round(x,2))
     return attainment
-  '''
-  def compute_co_pso(self,sheet):
-    df, pso_list, co_list = read_co_pso_mapping(self.spreadsheet,sheet)
-    course_co_list = self.attainment.columns
-    pso_attainment_data = pd.DataFrame(columns =pso_list, index = course_co_list)
-    pso_attainment_data[:] = 0
-    pso_total = {}
-    for pso in pso_list:
-      pso_total[pso] = 0
-      for co in course_co_list:
-        pso_total[pso] += df.loc[co,pso]
-        pso_attainment_data.loc[co,pso] = round(df.loc[co,pso]*self.attainment.loc['Attainment %',co]/100,2)
-    pso_sum = pso_attainment_data.sum().apply(pd.to_numeric)
-    pso_percent = {}
-    for pso in pso_list:
-      if pso_total[pso] != 0:
-        pso_percent[pso] = round( pso_sum[pso]*100/pso_total[pso],2)
-      else:
-        pso_percent[pso] = 0
-    pso_attainment_data.loc['Total',:] = pso_sum
-    pso_attainment_data.loc['%'] = pso_percent
-    return pso_attainment_data
-  '''
 
   def write_attainment(self,sheet_name,verbose=True):
     if verbose:

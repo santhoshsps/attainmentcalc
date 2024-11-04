@@ -48,28 +48,29 @@ def read_assessment(spreadsheet, sheet_name):
   #find the course outcomes
   row_co = find_row_index(df,'CO')
   co_list =  df.iloc[row_co,col_start:]
+  cos = list(set(sorted(co_list)))
 
   row_marks = find_row_index(df,'Marks')
+  marks_for_questions = df.iloc[row_marks,2:].apply(pd.to_numeric)
 
-  row_start = find_row_index(df,'Candidate Code')
-  question_list = df.iloc[row_start, col_start:]
+  row_start = find_row_index(df,'Candidate Code') + 1
 
-  question_list_for_co = {}
-  marks_for_co = {}
   co_marklist = pd.DataFrame()
 
-  row_start = row_start+1 # Data (Marks) starts here
-
-  for co in co_list:
-    selected_indices = co_list==co
-    question_list_for_co[co] = list(question_list[selected_indices])
-    marks_for_co[co] = df.iloc[row_marks,col_start:][selected_indices].apply(pd.to_numeric).sum()
-
+  for co in cos:
     for i in range(row_start,df.shape[0]):
       co_marklist.loc[i-row_start,'Code'] = df.iloc[i,0]
       co_marklist.loc[i-row_start,'Name'] = df.iloc[i,1]
-      marks_obtained = df.iloc[i,col_start:][selected_indices].apply(pd.to_numeric).sum()
-      co_marklist.loc[i-row_start,co] = marks_obtained/marks_for_co[co]
+      maxmarks = 0
+      marksobtained = 0
+      for j in range(col_start,df.shape[1]):
+        if df.iloc[i,j] != '' and co_list.iloc[j-col_start] == co:
+          maxmarks += marks_for_questions.iloc[j-col_start]
+          marksobtained += float(df.iloc[i,j])
+      if maxmarks != 0:
+        marksobtained /= maxmarks
+      co_marklist.loc[i-row_start,co] = marksobtained
+  
   return co_marklist, assessment_type, id, weight, co_list.to_list()
 
 
